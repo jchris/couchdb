@@ -1148,11 +1148,6 @@ make_map_fold_fun(true, Conflicts, Db, Queue) ->
     fun({{_Key, error}, _Value} = Row, _, Acc) ->
         ok = couch_view_merger_queue:queue(Queue, Row),
         {ok, Acc};
-    ({{_Key, DocId} = Kd, {Props} = Value}, _, Acc) ->
-        IncludeId = get_value(<<"_id">>, Props, DocId),
-        [{doc, Doc}] = couch_httpd_view:doc_member(Db, IncludeId, DocOpenOpts),
-        ok = couch_view_merger_queue:queue(Queue, {Kd, Value, Doc}),
-        {ok, Acc};
     ({{_Key, DocId} = Kd, Value}, _, Acc) ->
         [{doc, Doc}] = couch_httpd_view:doc_member(Db, DocId, DocOpenOpts),
         ok = couch_view_merger_queue:queue(Queue, {Kd, Value, Doc}),

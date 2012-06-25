@@ -21,7 +21,7 @@
 main(_) ->
     test_util:init_code_path(),
 
-    etap:plan(82),
+    etap:plan(83),
     case (catch test()) of
         ok ->
             etap:end_tests();
@@ -39,6 +39,7 @@ test() ->
     test_empty_results_single_function(),
     test_empty_results_multiple_functions(),
     test_single_results_single_function(),
+    test_single_results_single_function_meta(),
     test_single_results_multiple_functions(),
     test_multiple_results_single_function(),
     test_multiple_results_multiple_functions(),
@@ -108,6 +109,12 @@ test_single_results_single_function() ->
     Results = mapreduce:map_doc(Ctx, <<"{\"_id\": \"doc1\", \"value\": 1}">>),
     etap:is(Results, {ok, [[{<<"\"doc1\"">>, <<"null">>}]]}, "Map function emitted 1 key").
 
+test_single_results_single_function_meta() ->
+    {ok, Ctx} = mapreduce:start_map_context([
+        <<"function(doc, meta) { emit(meta.id, null); }">>
+    ]),
+    Results = mapreduce:map_doc(Ctx, <<"{\"value\": 1}">>, <<"{\"id\": \"doc1\"}">>),
+    etap:is(Results, {ok, [[{<<"\"doc1\"">>, <<"null">>}]]}, "Map function emitted 1 key from meta").
 
 test_single_results_multiple_functions() ->
     {ok, Ctx} = mapreduce:start_map_context([

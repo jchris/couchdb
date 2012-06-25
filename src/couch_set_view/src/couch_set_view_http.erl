@@ -277,10 +277,6 @@ make_view_fold_fun(Req, QueryArgs, Etag, Group, TotalViewCount, HelperFuns) ->
 get_row_doc(_Kv, _SetName, false, _UserCtx, _DocOpenOptions) ->
     nil;
 
-get_row_doc({{_Key, DocId}, {PartId, {Props}}}, SetName, true, UserCtx, DocOpenOptions) ->
-    Id = couch_util:get_value(<<"_id">>, Props, DocId),
-    open_row_doc(SetName, PartId, Id, UserCtx, DocOpenOptions);
-
 get_row_doc({{_Key, DocId}, {PartId, _Value}}, SetName, true, UserCtx, DocOpenOptions) ->
     open_row_doc(SetName, PartId, DocId, UserCtx, DocOpenOptions).
 
@@ -290,7 +286,7 @@ open_row_doc(SetName, PartId, Id, UserCtx, DocOptions) ->
         ?dbname(SetName, PartId), [{user_ctx, UserCtx}]),
     JsonDoc = case (catch couch_db_frontend:open_doc(Db, Id, DocOptions)) of
     {ok, #doc{} = Doc} ->
-        {json, couch_doc:to_raw_json_binary(Doc)};
+        {json, couch_doc:to_json_bin(Doc)};
     _ ->
         {json, <<"null">>}
     end,
