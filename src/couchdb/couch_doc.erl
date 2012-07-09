@@ -13,7 +13,7 @@
 -module(couch_doc).
 
 -export([parse_rev/1,parse_revs/1,rev_to_str/1,revs_to_strs/1]).
--export([from_json_obj/1,to_json_obj/2,to_json_bin/1,from_binary/3]).
+-export([from_json_obj/1,to_json_obj/2,to_json_obj/1,to_json_bin/1,from_binary/3]).
 -export([validate_docid/1,with_uncompressed_body/1]).
 -export([with_ejson_body/1,with_json_body/1]).
 -export([to_raw_json_binary_views/1]).
@@ -28,15 +28,15 @@ to_json_rev(Start, RevId) ->
     [{<<"rev">>, ?l2b([integer_to_list(Start),"-",revid_to_str(RevId)])}].
 
 to_ejson_body(_ContentMeta, {Body}) ->
-    {Body};
+    {<<"json">>, {Body}};
 to_ejson_body(?CONTENT_META_JSON, <<"{}">>) ->
-    {[]};
+    {<<"json">>, {[]}};
 to_ejson_body(?CONTENT_META_JSON, Body) ->
     {R} = ?JSON_DECODE(Body),
-    {R};
+    {<<"json">>, {R}};
 to_ejson_body(ContentMeta, Body)
         when ContentMeta /= ?CONTENT_META_JSON ->
-    binary_to_list(iolist_to_binary([Body])).
+    {<<"base64">>, iolist_to_binary(base64:encode(iolist_to_binary(Body)))}.
 
 
 revid_to_str(RevId) ->
@@ -69,7 +69,9 @@ content_meta_to_memcached_meta(?CONTENT_META_INVALID_JSON) ->
 content_meta_to_memcached_meta(?CONTENT_META_INVALID_JSON_KEY) ->
     <<"invalid_key">>;
 content_meta_to_memcached_meta(?CONTENT_META_NON_JSON_MODE) ->
-    <<"non-JSON mode">>.
+    <<"non-JSON mode">>;
+content_meta_to_memcached_meta(_Other) ->
+    <<"raw">>.
 
 to_memcached_meta(#doc{rev={_, RevId},content_meta=Meta}) ->
     case content_meta_to_memcached_meta(Meta) of
@@ -91,36 +93,40 @@ to_deleted_meta(_) ->
     [].
 
 to_full_ejson_meta(#doc{id=Id,deleted=Del,rev={Start, RevId},
-        meta=Meta,content_meta=ContentMeta}=Doc) ->
+        meta=Meta, content_meta=ContentMeta}=Doc, IncludeType) ->
     {
         [json_id(Id)]
         ++ to_json_rev(Start, RevId)
         ++ to_json_meta(Meta)
         ++ to_memcached_meta(Doc)
         ++ to_deleted_meta(Del)
-        ++ case ContentMeta of
-        ?CONTENT_META_JSON ->
+        ++ case {IncludeType, ContentMeta} of
+        {true, ?CONTENT_META_JSON} ->
             [{<<"type">>, <<"json">>}];
+        {true, _} ->
+            [{<<"type">>, <<"base64">>}];
         _ ->
-            [{<<"type">>, <<"blob">>}]
+           []
         end
     }.
 
+to_json_obj(Doc0)->
+    to_json_obj(Doc0, []).
+
 to_json_obj(Doc0, _Options)->
-    Doc = with_uncompressed_body(Doc0),
-    #doc{body=Body,content_meta=ContentMeta} = Doc,
-    {[{<<"meta">>, to_full_ejson_meta(Doc)},
-      {<<"body">>, to_ejson_body(ContentMeta, Body)
-    }]}.
+    JSONBin = to_json_bin(Doc0),
+    ?JSON_DECODE(JSONBin).
 
-to_json_bin(Doc)->
-    {DocBody, DocMeta} = to_raw_json_binary_views(Doc),
-
+to_json_bin(Doc0)->
+    Doc = with_json_body(Doc0),
+    DocMeta = ?JSON_ENCODE(to_full_ejson_meta(Doc, false)),
+    {DocBody, _DocMeta} = to_raw_json_binary_views(Doc),
+    ?LOG_INFO("to_json_bin ~p ~p ~p", [DocBody, Doc#doc.content_meta, DocMeta]),
     case Doc#doc.content_meta of
     ?CONTENT_META_JSON ->
-        iolist_to_binary([<<"{\"json\":">>, DocBody,<<",\"meta\":">>, DocMeta, <<"}">>]);
+        iolist_to_binary([<<"{\"meta\":">>, DocMeta, <<",\"json\":">>, DocBody,<<"}">>]);
     _ -> % encode as raw byte array (make conditional...)
-        iolist_to_binary([<<"{\"blob\":">>, DocBody,<<",\"meta\":">>, DocMeta, <<"}">>])
+        iolist_to_binary([<<"{\"meta\":">>, DocMeta, <<",\"base64\":">>, DocBody,<<"}">>])
     end.
 
 
@@ -196,6 +202,11 @@ validate_docid(Id) ->
 transfer_meta([], Doc) ->
     Doc;
 
+transfer_meta([{<<"id">>, Id} | Rest], Doc) when is_list(Id) ->
+    BinId = list_to_binary(Id),
+    validate_docid(BinId),
+    transfer_meta(Rest, Doc#doc{id=BinId});
+
 transfer_meta([{<<"id">>, Id} | Rest], Doc) ->
     validate_docid(Id),
     transfer_meta(Rest, Doc#doc{id=Id});
@@ -217,21 +228,20 @@ transfer_meta([{_Other, _} | Rest], Doc) ->
     transfer_meta(Rest, Doc).
 
 
-
-transfer_fields([], #doc{body=Fields}=Doc) when is_list(Fields) ->
+transfer_fields([], #doc{body={Fields}}=Doc) when is_list(Fields) ->
     % convert fields back to json object
-    Doc#doc{body=?JSON_ENCODE({Fields})};
+    Doc#doc{body=?JSON_ENCODE({Fields}), content_meta=?CONTENT_META_JSON};
 
 transfer_fields([], #doc{}=Doc) ->
     Doc;
 
 % if the body is nested we can transfer it without care for special fields.
 transfer_fields([{<<"json">>, {JsonProps}} | Rest], Doc) ->
-    transfer_fields(Rest, Doc#doc{body=(JsonProps)});
+    transfer_fields(Rest, Doc#doc{body={JsonProps}, content_meta=?CONTENT_META_JSON});
 
-% in case the body is a blob we transfer it as an array of JSON numbers.
-transfer_fields([{<<"blob">>, JsonArray} | Rest], Doc) when is_list(JsonArray) ->
-    transfer_fields(Rest, Doc#doc{body=list_to_binary(JsonArray)}); % todo base64
+% in case the body is a blob we transfer it as base64.
+transfer_fields([{<<"base64">>, Bin} | Rest], Doc) ->
+    transfer_fields(Rest, Doc#doc{body=base64:decode(Bin), content_meta=?CONTENT_META_NON_JSON_MODE}); % todo base64
 
 transfer_fields([{<<"meta">>, {Meta}} | Rest], Doc) ->
     DocWithMeta = transfer_meta(Meta, Doc),
@@ -239,19 +249,24 @@ transfer_fields([{<<"meta">>, {Meta}} | Rest], Doc) ->
 
 % unknown top level field
 transfer_fields([{Name, _} | _], _) ->
+    catch throw(away),
+    ?LOG_INFO("the trace: ~p",[erlang:get_stacktrace()]),
     throw({doc_validation,
-        ?l2b(io_lib:format("User data must be in the `body` field, please nest `~s`", [Name]))}).
+        ?l2b(io_lib:format("User data must be in the `json` field, please nest `~s`", [Name]))}).
 
 
 with_ejson_body(Doc) ->
     Uncompressed = with_uncompressed_body(Doc),
     #doc{body = Body, content_meta=Meta} = Uncompressed,
-    Uncompressed#doc{body = to_ejson_body(Meta, Body)}.
+    {_Type, EJSONBody}= to_ejson_body(Meta, Body),
+    Uncompressed#doc{body = EJSONBody}.
 
 with_json_body(Doc) ->
     case with_uncompressed_body(Doc) of
     #doc{body = Body} = Doc2 when is_tuple(Body)->
-        Doc2#doc{body = ?JSON_ENCODE(Body)};
+        Doc2#doc{body = ?JSON_ENCODE(Body), content_meta=?CONTENT_META_JSON};
+    #doc{body = Body} = Doc2 when is_binary(Body)->
+        Doc2;
     #doc{} = Doc2 ->
         Doc2
     end.
@@ -277,12 +292,12 @@ json_id(Id) ->
 
 to_raw_json_binary_views(Doc0) ->
     Doc = with_json_body(Doc0),
-    MetaBin = ?JSON_ENCODE(to_full_ejson_meta(Doc)),
-
+    MetaBin = ?JSON_ENCODE(to_full_ejson_meta(Doc, true)),
+    ?LOG_INFO("to_raw_json_binary_views ~p ~p ~p", [Doc#doc.body, Doc#doc.content_meta, MetaBin]),
     ContentBin = case Doc#doc.content_meta of
     ?CONTENT_META_JSON ->
         iolist_to_binary(Doc#doc.body);
     _ -> % encode as raw byte array (make conditional...)
-        ?JSON_ENCODE(binary_to_list(iolist_to_binary(Doc#doc.body)))
+        iolist_to_binary([<<"\"">>, base64:encode(iolist_to_binary(Doc#doc.body)), <<"\"">>])
     end,
     {ContentBin, MetaBin}.

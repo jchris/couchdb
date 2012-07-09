@@ -180,7 +180,7 @@ db_req(#httpd{method='POST',
 
     Doc = couch_doc:from_json_obj({[
         {<<"meta">>, {[{<<"id">>,couch_uuids:new()}]}},
-        {<<"body">>, couch_httpd:json_body(Req)}]}),
+        {<<"json">>, couch_httpd:json_body(Req)}]}),
 
     DocId = Doc#doc.id,
     case couch_httpd:qs_value(Req, "batch") of
@@ -235,6 +235,7 @@ db_req(#httpd{method='POST',
               db_frontend=DbFrontend}=Req, Db) ->
     couch_httpd:validate_ctype(Req, "application/json"),
     {JsonProps} = couch_httpd:json_body_obj(Req),
+    ?LOG_INFO("_bulk_docs POST ~p", [JsonProps]),
     case couch_util:get_value(<<"docs">>, JsonProps) of
     undefined ->
         send_error(Req, 400, <<"bad_request">>, <<"Missing JSON list of 'docs'">>);
@@ -501,7 +502,7 @@ db_doc_req(#httpd{method='PUT'}=Req, Db, DocId) ->
         Body = couch_httpd:json_body(Req),
         couch_doc:from_json_obj({[
             {<<"meta">>, {[{<<"id">>, DocId}]}},
-            {<<"body">>, Body}]});
+            {<<"json">>, Body}]});
     false ->
         Body = couch_httpd:body(Req),
         couch_doc:from_binary(DocId, Body, false)

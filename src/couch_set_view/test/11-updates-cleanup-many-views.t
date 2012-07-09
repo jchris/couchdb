@@ -312,8 +312,10 @@ update_docs(StartId, NumDocs, DocValue) ->
     Docs = lists:foldl(
         fun(I, Acc) ->
             Doc = couch_doc:from_json_obj({[
-                {<<"_id">>, doc_id(I)},
-                {<<"value">>, DocValue}
+                {<<"meta">>, {[{<<"id">>, doc_id(I)}]}},
+                {<<"json">>, {[
+                    {<<"value">>, DocValue}
+                ]}}
             ]}),
             DocList = case orddict:find(I rem 64, Acc) of
             {ok, L} ->
@@ -343,19 +345,20 @@ create_set() ->
     etap:diag("Creating the set databases (# of partitions: " ++
         integer_to_list(num_set_partitions()) ++ ")"),
     DDoc = {[
-        {<<"_id">>, ddoc_id()},
+        {<<"meta">>, {[{<<"id">>, ddoc_id()}]}},
+        {<<"json">>, {[
         {<<"language">>, <<"javascript">>},
         {<<"views">>, {[
             {<<"view_1">>, {[
-                {<<"map">>, <<"function(doc) { emit(doc._id, doc.value); }">>},
+                {<<"map">>, <<"function(doc, meta) { emit(meta.id, doc.value); }">>},
                 {<<"reduce">>, <<"_sum">>}
             ]}},
             {<<"view_2">>, {[
-                {<<"map">>, <<"function(doc) { emit(doc._id, doc.value); }">>},
+                {<<"map">>, <<"function(doc, meta) { emit(meta.id, doc.value); }">>},
                 {<<"reduce">>, <<"_count">>}
             ]}},
             {<<"view_3">>, {[
-                {<<"map">>, <<"function(doc) { emit(doc._id, doc.value * 2); }">>},
+                {<<"map">>, <<"function(doc, meta) { emit(meta.id, doc.value * 2); }">>},
                 {<<"reduce">>, <<"function(key, values, rereduce) {"
                                  "if (rereduce) {"
                                  "    return sum(values);"
@@ -368,6 +371,7 @@ create_set() ->
                                  "}"
                                  "}">>}
             ]}}
+        ]}}
         ]}}
     ]},
     ok = couch_set_view_test_util:update_ddoc(test_set_name(), DDoc),
@@ -386,8 +390,10 @@ add_documents(StartId, Count, DocValue) ->
     DocList0 = lists:map(
         fun(I) ->
             {I rem num_set_partitions(), {[
-                {<<"_id">>, doc_id(I)},
-                {<<"value">>, DocValue}
+                {<<"meta">>, {[{<<"id">>, doc_id(I)}]}},
+                {<<"json">>, {[
+                    {<<"value">>, DocValue}
+                ]}}
             ]}}
         end,
         lists:seq(StartId, StartId + Count - 1)),

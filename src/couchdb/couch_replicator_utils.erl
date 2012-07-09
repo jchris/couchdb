@@ -33,7 +33,7 @@
 
 parse_rep_doc({Doc}, UserCtx) ->
     {Meta} = get_value(<<"meta">>, Doc, {[]}),
-    {Props} = get_value(<<"body">>, Doc, {[]}),
+    {Props} = get_value(<<"json">>, Doc, {[]}),
     ProxyParams = parse_proxy_params(get_value(<<"proxy">>, Props, <<>>)),
     Options = make_options(Props),
     case get_value(cancel, Options, false) andalso

@@ -127,11 +127,11 @@ query_view(ExpectedRowCount, QueryString) ->
 populate_set() ->
     DDoc = {[
         {<<"meta">>, {[{<<"id">>, ddoc_id()}]}},
-        {<<"body">>, {[
+        {<<"json">>, {[
             {<<"language">>, <<"javascript">>},
             {<<"views">>, {[
                 {<<"test">>, {[
-                    {<<"map">>, <<"function(doc) { emit(doc.value, doc._id); }">>}
+                    {<<"map">>, <<"function(doc, meta) { emit(doc.value, meta.id); }">>}
                 ]}}
             ]}}
         ]}}
@@ -141,7 +141,7 @@ populate_set() ->
         fun(I) ->
             {[
                 {<<"meta">>, {[{<<"id">>, iolist_to_binary(["doc", integer_to_list(I)])}]}},
-                {<<"body">>, {[
+                {<<"json">>, {[
                     {<<"value">>, I}
                     ]}}
             ]}
@@ -163,11 +163,11 @@ populate_set() ->
 update_ddoc() ->
     NewDDoc = {[
         {<<"meta">>, {[{<<"id">>, ddoc_id()}]}},
-        {<<"body">>, {[
+        {<<"json">>, {[
             {<<"language">>, <<"javascript">>},
             {<<"views">>, {[
                 {<<"test">>, {[
-                    {<<"map">>, <<"function(doc) { emit(doc.value, null); }">>}
+                    {<<"map">>, <<"function(doc, meta) { emit(doc.value, null); }">>}
                 ]}}
             ]}}
             ]}}

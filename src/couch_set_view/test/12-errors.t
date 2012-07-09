@@ -98,12 +98,14 @@ test_partition_not_found_when_group_is_configured() ->
 
     DDocId = <<"_design/test">>,
     DDoc = {[
-        {<<"_id">>, DDocId},
+        {<<"meta">>, {[{<<"id">>, DDocId}]}},
+        {<<"json">>, {[
         {<<"language">>, <<"javascript">>},
         {<<"views">>, {[
             {<<"test">>, {[
-                {<<"map">>, <<"function(doc) { emit(doc._id, 1); }">>}
+                {<<"map">>, <<"function(doc, meta) { emit(meta.id, 1); }">>}
             ]}}
+        ]}}
         ]}}
     ]},
     populate_set(DDoc),
@@ -125,12 +127,14 @@ test_partition_not_found_when_group_starts() ->
 
     DDocId = <<"_design/test">>,
     DDoc = {[
-        {<<"_id">>, DDocId},
+        {<<"meta">>, {[{<<"id">>, DDocId}]}},
+        {<<"json">>, {[
         {<<"language">>, <<"javascript">>},
         {<<"views">>, {[
             {<<"test">>, {[
-                {<<"map">>, <<"function(doc) { emit(doc._id, 1); }">>}
+                {<<"map">>, <<"function(doc, meta) { emit(meta.id, 1); }">>}
             ]}}
+        ]}}
         ]}}
     ]},
     populate_set(DDoc),
@@ -185,12 +189,14 @@ test_map_runtime_error() ->
 
     DDocId = <<"_design/test">>,
     DDoc = {[
-        {<<"_id">>, DDocId},
+        {<<"meta">>, {[{<<"id">>, DDocId}]}},
+        {<<"json">>, {[
         {<<"language">>, <<"javascript">>},
         {<<"views">>, {[
             {<<"test">>, {[
-                {<<"map">>, <<"function(doc) { emit(doc.value.foo.bar, 1); }">>}
+                {<<"map">>, <<"function(doc, meta) { emit(doc.value.foo.bar, 1); }">>}
             ]}}
+        ]}}
         ]}}
     ]},
     populate_set(DDoc),
@@ -218,12 +224,14 @@ test_map_syntax_error() ->
 
     DDocId = <<"_design/test">>,
     DDoc = {[
-        {<<"_id">>, DDocId},
+        {<<"meta">>, {[{<<"id">>, DDocId}]}},
+        {<<"json">>, {[
         {<<"language">>, <<"javascript">>},
         {<<"views">>, {[
             {<<"test">>, {[
-                {<<"map">>, <<"function(doc) { emit(doc._id, 1); ">>}
+                {<<"map">>, <<"function(doc, meta) { emit(meta.id, 1); ">>}
             ]}}
+        ]}}
         ]}}
     ]},
     Result = try
@@ -244,13 +252,15 @@ test_builtin_reduce_runtime_error() ->
 
     DDocId = <<"_design/test">>,
     DDoc = {[
-        {<<"_id">>, DDocId},
+        {<<"meta">>, {[{<<"id">>, DDocId}]}},
+        {<<"json">>, {[
         {<<"language">>, <<"javascript">>},
         {<<"views">>, {[
             {<<"test">>, {[
-                {<<"map">>, <<"function(doc) { emit(doc._id, 'foobar'); }">>},
+                {<<"map">>, <<"function(doc, meta) { emit(meta.id, 'foobar'); }">>},
                 {<<"reduce">>, <<"_sum">>}
             ]}}
+        ]}}
         ]}}
     ]},
     populate_set(DDoc),
@@ -282,13 +292,15 @@ test_invalid_builtin_reduce_error() ->
 
     DDocId = <<"_design/test">>,
     DDoc = {[
-        {<<"_id">>, DDocId},
+        {<<"meta">>, {[{<<"id">>, DDocId}]}},
+        {<<"json">>, {[
         {<<"language">>, <<"javascript">>},
         {<<"views">>, {[
             {<<"test">>, {[
-                {<<"map">>, <<"function(doc) { emit(doc._id, 1); }">>},
+                {<<"map">>, <<"function(doc, meta) { emit(meta.id, 1); }">>},
                 {<<"reduce">>, <<"_foobar">>}
             ]}}
+        ]}}
         ]}}
     ]},
     Result = try
@@ -309,13 +321,15 @@ test_reduce_runtime_error() ->
 
     DDocId = <<"_design/test">>,
     DDoc = {[
-        {<<"_id">>, DDocId},
+        {<<"meta">>, {[{<<"id">>, DDocId}]}},
+        {<<"json">>, {[
         {<<"language">>, <<"javascript">>},
         {<<"views">>, {[
             {<<"test">>, {[
-                {<<"map">>, <<"function(doc) { emit(doc._id, 1); }">>},
+                {<<"map">>, <<"function(doc, meta) { emit(meta.id, 1); }">>},
                 {<<"reduce">>, <<"function(key, values, rereduce) { return values[0].foo.bar; }">>}
             ]}}
+        ]}}
         ]}}
     ]},
     populate_set(DDoc),
@@ -347,13 +361,15 @@ test_reduce_syntax_error() ->
 
     DDocId = <<"_design/test">>,
     DDoc = {[
-        {<<"_id">>, DDocId},
+        {<<"meta">>, {[{<<"id">>, DDocId}]}},
+        {<<"json">>, {[
         {<<"language">>, <<"javascript">>},
         {<<"views">>, {[
             {<<"test">>, {[
-                {<<"map">>, <<"function(doc) { emit(doc._id, 'foobar'); }">>},
+                {<<"map">>, <<"function(doc, meta) { emit(meta.id, 'foobar'); }">>},
                 {<<"reduce">>, <<"function(key, values, rereduce) { return sum(values);">>}
             ]}}
+        ]}}
         ]}}
     ]},
 
@@ -414,8 +430,10 @@ populate_set(DDoc) ->
     DocList = lists:map(
         fun(I) ->
             {[
-                {<<"_id">>, iolist_to_binary(["doc", integer_to_list(I)])},
-                {<<"value">>, I}
+                {<<"meta">>, {[{<<"id">>, iolist_to_binary(["doc", integer_to_list(I)])}]}},
+                {<<"json">>, {[
+                    {<<"value">>, I}
+                ]}}
             ]}
         end,
         lists:seq(1, num_docs())),

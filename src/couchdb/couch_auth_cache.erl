@@ -397,7 +397,7 @@ ensure_auth_ddoc_exists(Db, DDocId) ->
 auth_design_doc(DocId) ->
     DocProps = [
         {<<"meta">>, {[{<<"id">>, DocId}]}},
-        {<<"body">>, {[
+        {<<"json">>, {[
             {<<"language">>,<<"javascript">>},
             {<<"validate_doc_update">>, ?AUTH_DB_DOC_VALIDATE_FUNCTION}
         ]}}

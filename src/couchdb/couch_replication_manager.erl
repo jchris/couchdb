@@ -307,7 +307,7 @@ restart(#state{changes_feed_loop = Loop, rep_start_pids = StartPids} = State) ->
 process_update(State, {Change}) ->
     {DocProps} = JsonRepDoc = get_value(doc, Change),
     {RepMeta} = get_value(<<"meta">>, DocProps),
-    {RepProps} = get_value(<<"body">>, DocProps),
+    {RepProps} = get_value(<<"json">>, DocProps),
     DocId = get_value(<<"id">>, RepMeta),
     case get_value(<<"deleted">>, Change, false) of
     true ->
@@ -585,7 +585,7 @@ ensure_rep_ddoc_exists(RepDb, DDocID) ->
     _ ->
         DDoc = couch_doc:from_json_obj({[
             {<<"meta">>, {[{<<"id">>, DDocID}]}},
-            {<<"body">>, {[
+            {<<"json">>, {[
                 {<<"language">>, <<"javascript">>},
                 {<<"validate_doc_update">>, ?REP_DB_DOC_VALIDATE_FUN}
             ]}}
